@@ -113,18 +113,19 @@ void setup()
       Serial.print("Initializing... Controller..");
       espNow.init(NOW_MODE_CONTROLLER);
       espNow.on_message_recv([](uint8_t *macaddr, uint8_t *data, uint8_t len) {
+        Serial.print("FROM: ");
+        CMMC::dump(macaddr, 6); 
         memcpy(mmm, macaddr, 6);
         dirty = true;
         serialBusy = true;
-        led.toggle();
-        CMMC_SENSOR_DATA_T packet;
-        CMMC_PACKET_T wrapped;
-        memcpy(&packet, data, sizeof(packet));
-        wrapped.data = packet;
-        wrapped.ms = millis();
+        led.toggle(); 
+        static CMMC_PACKET_T wrapped; 
+        static CMMC_SENSOR_DATA_T packet;
+        memcpy(&packet, data, sizeof(packet)); 
+        memcpy(&wrapped.data, &packet, sizeof(packet));
+        wrapped.ms = millis(); 
         wrapped.sleepTime = currentSleepTimeMinuteByte;
-        wrapped.sum = CMMC::checksum((uint8_t*) &wrapped,
-                                     sizeof(wrapped) - sizeof(wrapped.sum));
+        wrapped.sum = CMMC::checksum((uint8_t*) &wrapped, sizeof(wrapped) - sizeof(wrapped.sum));
         Serial.printf("sizeof wrapped packet = %d\r\n", sizeof(wrapped));
         // Serial.write((byte*)&wrapped, sizeof(wrapped));
         CMMC_Utils::dump((u8*)&wrapped, sizeof(wrapped));
