@@ -13,6 +13,7 @@ void CMMC_RX_Parser::_parse(uint8_t data) {
   switch (_state) {
     case WAIT_STATE :
       if (data == START_BYTE_1) {
+        delay(1);
         if (this->_serial->read() == START_BYTE_2) {
           _state = CMD_STATE;
         }
@@ -30,7 +31,7 @@ void CMMC_RX_Parser::_parse(uint8_t data) {
         if (data_next == STOP_BYTE_2) {
           _state = WAIT_STATE;
           memcpy(&_user_packet, &_packet, sizeof(_packet));
-          this->_user_on_data(&_user_packet);
+          this->_user_on_data(&_user_packet, sizeof(_packet));
           _packet.len = 0;
           break;
         }

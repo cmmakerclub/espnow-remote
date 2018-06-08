@@ -20,7 +20,7 @@ typedef struct __attribute((__packed__)) {
 	uint8_t  data[DATA_BUFFER];
 } CMMC_SERIAL_PACKET_T;
 
-typedef void (*cmmc_void_cb_t)(CMMC_SERIAL_PACKET_T *packet);
+typedef void (*cmmc_void_cb_t)(CMMC_SERIAL_PACKET_T *packet, size_t len);
 
 
 class CMMC_RX_Parser

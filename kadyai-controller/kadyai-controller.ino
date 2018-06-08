@@ -9,7 +9,7 @@
 #include <CMMC_BootMode.h>
 #include "data_type.h"
 
-u8 b = 60; 
+u8 currentSleepTimeMinuteByte = 60; 
 #include <SoftwareSerial.h>
 #define rxPin 14
 #define txPin 12
@@ -79,13 +79,18 @@ void setup()
 {
   setup_hardware();
   Serial.println("Controller Mode");
-  parser.on_command_arrived([](CMMC_SERIAL_PACKET_T * packet) {
+  parser.on_command_arrived([](CMMC_SERIAL_PACKET_T * packet, size_t len) {
+    Serial.printf("ON_PARSER at (%lums)", millis());
+    Serial.printf("CMD->0x%2x\r\n", packet->cmd);
+    Serial.printf("LEN->%lu\r\n", packet->len);
+    CMMC::dump((u8*)packet->data, 4);
+    CMMC::dump((u8*)packet->data+4, 4);
+    Serial.printf("HEAP = %lu\r\n", ESP.getFreeHeap());
     if (packet->cmd == CMMC_SLEEP_TIME_CMD) {
       memcpy(&time, packet->data, 4);
-      b = time;
-
+      currentSleepTimeMinuteByte = time; 
       if (time > 255) {
-        b = 254;
+        currentSleepTimeMinuteByte = 254;
       }
     }
   });
@@ -112,16 +117,16 @@ void setup()
         dirty = true;
         serialBusy = true;
         led.toggle();
-        CMMC_SENSOR_T packet;
+        CMMC_SENSOR_DATA_T packet;
         CMMC_PACKET_T wrapped;
         memcpy(&packet, data, sizeof(packet));
         wrapped.data = packet;
         wrapped.ms = millis();
-        wrapped.sleepTime = b;
+        wrapped.sleepTime = currentSleepTimeMinuteByte;
         wrapped.sum = CMMC::checksum((uint8_t*) &wrapped,
                                      sizeof(wrapped) - sizeof(wrapped.sum));
-        Serial.printf("sizeof wrapped = %d\r\n", sizeof(wrapped));
-        Serial.write((byte*)&wrapped, sizeof(wrapped));
+        Serial.printf("sizeof wrapped packet = %d\r\n", sizeof(wrapped));
+        // Serial.write((byte*)&wrapped, sizeof(wrapped));
         CMMC_Utils::dump((u8*)&wrapped, sizeof(wrapped));
         Serial.println(swSerial.write((byte*)&wrapped, sizeof(wrapped)));
       });
@@ -156,7 +161,8 @@ void loop()
   }
 
   while (dirty) {
-    espNow.send(mmm, &b, 1);
+    Serial.printf("SENT SLEEP_TIME BACK = %u MINUTE\r\n", currentSleepTimeMinuteByte);
+    espNow.send(mmm, &currentSleepTimeMinuteByte, 1);
     delay(1);
   }
 
