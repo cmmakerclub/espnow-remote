@@ -11,8 +11,8 @@
 
 u8 currentSleepTimeMinuteByte = 60; 
 #include <SoftwareSerial.h>
-#define rxPin 14
-#define txPin 12
+#define rxPin 12
+#define txPin 14
 
 bool serialBusy = false;
 bool dirty = false;
