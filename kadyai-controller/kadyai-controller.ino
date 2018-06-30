@@ -7,9 +7,30 @@
 #include <CMMC_ESPNow.h>
 #include <CMMC_LED.h>
 #include <CMMC_BootMode.h>
+#include <CMMC_NB_IoT.h>
 #include "data_type.h"
 
-u8 currentSleepTimeMinuteByte = 60; 
+char* espnowMsg[300];
+
+void str2Hex(const char* text, char* buffer) {
+  size_t len = strlen(text);
+  for (int i = 0 ; i < len; i++) {
+    sprintf(buffer + i * 2, "%02x", text[i]);
+  }
+}
+
+void toHexString(const u8 array[], size_t len, char buffer[]) {
+  for (unsigned int i = 0; i < len; i++)
+  {
+    byte nib1 = (array[i] >> 4) & 0x0F;
+    byte nib2 = (array[i] >> 0) & 0x0F;
+    buffer[i * 2 + 0] = nib1  < 0xA ? '0' + nib1  : 'A' + nib1  - 0xA;
+    buffer[i * 2 + 1] = nib2  < 0xA ? '0' + nib2  : 'A' + nib2  - 0xA;
+  }
+  buffer[len * 2] = '\0';
+}
+
+u8 currentSleepTimeMinuteByte = 60;
 #include <SoftwareSerial.h>
 #define rxPin 12
 #define txPin 14
@@ -17,8 +38,13 @@ u8 currentSleepTimeMinuteByte = 60;
 bool serialBusy = false;
 bool dirty = false;
 
+bool flag = 0;
+String token = "c7f549d0-1858-11e8-8630-b33e669e2295";
+char tokenHex[100];
+
 // SoftwareSerial swSerial(rxPin, txPin, false, 128);
 SoftwareSerial swSerial(rxPin, txPin);
+CMMC_NB_IoT nb(&swSerial);
 
 #define LED_PIN                 2
 #define BUTTON_PIN              0
@@ -53,6 +79,56 @@ void setup_hardware() {
 
   Serial.println();
   led.init();
+  delay(50);
+  Serial.println();
+  Serial.print(F("Starting Application... at ("));
+  Serial.print(millis());
+  Serial.println("ms)");
+
+  str2Hex(token.c_str(), tokenHex);
+  Serial.println(tokenHex);
+  nb.setDebugStream(&Serial);
+
+  nb.onDeviceReboot([]() {
+    Serial.println(F("[user] Device rebooted."));
+    // nb.queryDeviceInfo();
+    // delay(1000);
+  }); nb.onDeviceReady([]() {
+    Serial.println("[user] Device Ready!");
+  });
+
+  nb.onDeviceInfo([](CMMC_NB_IoT::DeviceInfo device) {
+    Serial.print(F("# Module IMEI-->  "));
+    Serial.println(device.imei);
+    Serial.print(F("# Firmware ver-->  "));
+    Serial.println(device.firmware);
+    Serial.print(F("# IMSI SIM-->  "));
+    Serial.println(device.imsi);
+  });
+
+  nb.onMessageArrived([](char *text, size_t len, uint8_t socketId, char* ip, uint16_t port) {
+    char buffer[100];
+    sprintf(buffer, "++ [recv:] socketId=%u, ip=%s, port=%u, len=%d bytes (%lums)", socketId, ip, port, len, millis());
+    Serial.println(buffer);
+  });
+
+  nb.onConnecting([]() {
+    Serial.println("Connecting to NB-IoT...");
+    delay(500);
+  });
+
+  nb.onConnected([]() {
+    Serial.print("[user] NB-IoT Network connected at (");
+    Serial.print(millis());
+    Serial.println("ms)");
+    Serial.println(nb.createUdpSocket("103.20.205.85", 5683, UDPConfig::ENABLE_RECV));
+    Serial.println(nb.createUdpSocket("103.212.181.167", 55566, UDPConfig::ENABLE_RECV));
+    flag = 1;
+    delay(1000);
+  });
+  nb.rebootModule();
+  // nb.begin();
+  // nb.activate();
 }
 
 void start_config_mode() {
@@ -79,28 +155,28 @@ void setup()
 {
   setup_hardware();
   Serial.println("Controller Mode");
-  parser.on_command_arrived([](CMMC_SERIAL_PACKET_T * packet, size_t len) {
-    Serial.printf("ON_PARSER at (%lums)", millis());
-    Serial.printf("CMD->0x%2x\r\n", packet->cmd);
-    Serial.printf("LEN->%lu\r\n", packet->len);
-    CMMC::dump((u8*)packet->data, 4);
-    CMMC::dump((u8*)packet->data+4, 4);
-    Serial.printf("HEAP = %lu\r\n", ESP.getFreeHeap());
-    if (packet->cmd == CMMC_SLEEP_TIME_CMD) {
-      memcpy(&time, packet->data, 4);
-      currentSleepTimeMinuteByte = time; 
-      if (time > 255) {
-        currentSleepTimeMinuteByte = 254;
-      }
-    }
-  });
+  // parser.on_command_arrived([](CMMC_SERIAL_PACKET_T * packet, size_t len) {
+  //   Serial.printf("ON_PARSER at (%lums)", millis());
+  //   Serial.printf("CMD->0x%2x\r\n", packet->cmd);
+  //   Serial.printf("LEN->%lu\r\n", packet->len);
+  //   CMMC::dump((u8*)packet->data, 4);
+  //   CMMC::dump((u8*)packet->data+4, 4);
+  //   Serial.printf("HEAP = %lu\r\n", ESP.getFreeHeap());
+  //   if (packet->cmd == CMMC_SLEEP_TIME_CMD) {
+  //     memcpy(&time, packet->data, 4);
+  //     currentSleepTimeMinuteByte = time;
+  //     if (time > 255) {
+  //       currentSleepTimeMinuteByte = 254;
+  //     }
+  //   }
+  // });
 
-  pinMode(PROD_MODE_PIN, INPUT_PULLUP); 
+  pinMode(PROD_MODE_PIN, INPUT_PULLUP);
   uint32_t wait_config = 1000;
   if (digitalRead(PROD_MODE_PIN) == LOW) {
-    wait_config = 0; 
-  } 
-  Serial.printf("wait_config = %d \r\n", wait_config); 
+    wait_config = 0;
+  }
+  Serial.printf("wait_config = %d \r\n", wait_config);
   CMMC_BootMode bootMode(&mode, BUTTON_PIN);
   bootMode.init();
   bootMode.check([](int mode) {
@@ -114,22 +190,23 @@ void setup()
       espNow.init(NOW_MODE_CONTROLLER);
       espNow.on_message_recv([](uint8_t *macaddr, uint8_t *data, uint8_t len) {
         Serial.print("FROM: ");
-        CMMC::dump(macaddr, 6); 
+        CMMC::dump(macaddr, 6);
         memcpy(mmm, macaddr, 6);
         dirty = true;
         serialBusy = true;
-        led.toggle(); 
-        static CMMC_PACKET_T wrapped; 
+        led.toggle();
+        static CMMC_PACKET_T wrapped;
         static CMMC_SENSOR_DATA_T packet;
-        memcpy(&packet, data, sizeof(packet)); 
+        memcpy(&packet, data, sizeof(packet));
         memcpy(&wrapped.data, &packet, sizeof(packet));
-        wrapped.ms = millis(); 
+        wrapped.ms = millis();
         wrapped.sleepTime = currentSleepTimeMinuteByte;
         wrapped.sum = CMMC::checksum((uint8_t*) &wrapped, sizeof(wrapped) - sizeof(wrapped.sum));
         Serial.printf("sizeof wrapped packet = %d\r\n", sizeof(wrapped));
+        toHexString((u8*)  &wrapped, sizeof(CMMC_PACKET_T), (char*)espnowMsg);
         // Serial.write((byte*)&wrapped, sizeof(wrapped));
-        CMMC_Utils::dump((u8*)&wrapped, sizeof(wrapped));
-        Serial.println(swSerial.write((byte*)&wrapped, sizeof(wrapped)));
+        // CMMC_Utils::dump((u8*)&wrapped, sizeof(wrapped));
+        // Serial.println(swSerial.write((byte*)&wrapped, sizeof(wrapped)));
       });
 
       espNow.on_message_sent([](uint8_t *macaddr,  uint8_t status) {
@@ -145,6 +222,8 @@ void setup()
 
 #include <CMMC_TimeOut.h>
 CMMC_TimeOut ct;
+uint32_t prev = millis();
+
 void loop()
 {
   while (mode == BootMode::MODE_CONFIG) {
@@ -156,15 +235,40 @@ void loop()
     Serial.println("Simple Pair Wait timeout.");
     ESP.reset();
   }
-  if (serialBusy == false) {
-    parser.process();
-    delay(1);
-  }
 
+
+  nb.loop();
   while (dirty) {
     Serial.printf("SENT SLEEP_TIME BACK = %u MINUTE\r\n", currentSleepTimeMinuteByte);
     espNow.send(mmm, &currentSleepTimeMinuteByte, 1);
     delay(1);
+    char buffer[500];
+    char b[500];
+    sprintf(b, "{\"payload\": \"%s\"}", espnowMsg);
+    str2Hex(b, buffer);
+    String p3 = "";
+    p3 += String("40");
+    p3 += String("020579");
+    p3 += String("b5");
+    p3 += String("4e42496f54"); // NB-IoT
+    p3 += String("0d");
+    p3 += String("17");
+    p3 +=  String(tokenHex);
+    p3 += String("ff");
+    p3 += String(buffer);
+
+    // if (nb.sendMessageHex(p3.c_str(), 1)) {
+    //   Serial.println(">> [cmmc] socket1: send ok.");
+    // }
+    int rt = 0;
+    while (!nb.sendMessageHex(p3.c_str(), 0)) {
+      Serial.println(">> [ais] socket0: send ok.");
+      swSerial.flush();
+      if (++rt > 5) {
+        break;
+      }
+    }
+    prev = millis();
   }
 
   ct.timeout_ms(5000);
