@@ -30,7 +30,7 @@ void toHexString(const u8 array[], size_t len, char buffer[]) {
   buffer[len * 2] = '\0';
 }
 
-u8 currentSleepTimeMinuteByte = 60;
+u8 currentSleepTimeMinuteByte = 5;
 #include <SoftwareSerial.h>
 #define rxPin 12
 #define txPin 14
@@ -149,6 +149,8 @@ int counter = 0;
 CMMC_RX_Parser parser(&swSerial);
 
 uint32_t time;
+CMMC_PACKET_T pArr[20];
+int pArrIdx = 0;
 
 
 void setup()
@@ -203,7 +205,9 @@ void setup()
         wrapped.sleepTime = currentSleepTimeMinuteByte;
         wrapped.sum = CMMC::checksum((uint8_t*) &wrapped, sizeof(wrapped) - sizeof(wrapped.sum));
         Serial.printf("sizeof wrapped packet = %d\r\n", sizeof(wrapped));
-        toHexString((u8*)  &wrapped, sizeof(CMMC_PACKET_T), (char*)espnowMsg);
+        pArr[pArrIdx] = wrapped;
+        pArrIdx = (pArrIdx+1)%10;
+        // toHexString((u8*)  &wrapped, sizeof(CMMC_PACKET_T), (char*)espnowMsg);
         // Serial.write((byte*)&wrapped, sizeof(wrapped));
         // CMMC_Utils::dump((u8*)&wrapped, sizeof(wrapped));
         // Serial.println(swSerial.write((byte*)&wrapped, sizeof(wrapped)));
@@ -244,6 +248,14 @@ void loop()
     delay(1);
     char buffer[500];
     char b[500];
+
+    // if (nb.sendMessageHex(p3.c_str(), 1)) {
+    //   Serial.println(">> [cmmc] socket1: send ok.");
+    // }
+    Serial.printf("pArrIdx = %d\r\n", pArrIdx);
+    for(int i=pArrIdx-1; i >= 0; i--){
+      Serial.printf("reading idx = %d\r\n", i);
+      toHexString((u8*)  &pArr[i], sizeof(CMMC_PACKET_T), (char*)espnowMsg);
     sprintf(b, "{\"payload\": \"%s\"}", espnowMsg);
     str2Hex(b, buffer);
     String p3 = "";
@@ -256,16 +268,22 @@ void loop()
     p3 +=  String(tokenHex);
     p3 += String("ff");
     p3 += String(buffer);
-
-    // if (nb.sendMessageHex(p3.c_str(), 1)) {
-    //   Serial.println(">> [cmmc] socket1: send ok.");
-    // }
-    int rt = 0;
-    while (!nb.sendMessageHex(p3.c_str(), 0)) {
-      Serial.println(">> [ais] socket0: send ok.");
-      swSerial.flush();
-      if (++rt > 5) {
-        break;
+      int rt = 0;
+      while (true) {
+        swSerial.flush();
+        if (nb.sendMessageHex(p3.c_str(), 0)) {
+            Serial.println(">> [ais] socket0: send ok."); 
+            swSerial.flush();
+            pArrIdx--;
+            break;
+        }
+        else {
+          Serial.println(">> [ais] socket0: send failed.");
+          if (++rt > 5) {
+            swSerial.flush();
+            break;
+          } 
+        }
       }
     }
     prev = millis();
