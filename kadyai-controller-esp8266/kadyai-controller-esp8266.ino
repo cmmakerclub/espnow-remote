@@ -6,30 +6,17 @@
 #include <CMMC_ESPNow.h>
 #include <CMMC_LED.h>
 #include <CMMC_BootMode.h>
-#include <CMMC_NB_IoT.h>
 #include "data_type.h"
 
-#include <SoftwareSerial.h>
-#define rxPin                  12
-#define txPin                  14
 #define LED_PIN                 2
 #define BUTTON_PIN              0
 #define PROD_MODE_PIN          13
 
 
-void str2Hex(const char* text, char* buffer);
-void toHexString(const u8 array[], size_t len, char buffer[]);
-
 char* espnowMsg[300];
 bool dirty = false;
-bool isNbConnected = false;
 u8 currentSleepTimeMinuteByte = 5; 
-//String token = "c7f549d0-1858-11e8-8630-b33e669e2295";
-String token = "b98ce7b0-185b-11e8-8630-b33e669e2295";
-char tokenHex[100];
 
-SoftwareSerial swSerial(rxPin, txPin);
-CMMC_NB_IoT nb(&swSerial);
 int mode;
 
 CMMC_SimplePair instance;
@@ -41,62 +28,7 @@ uint8_t mmm[6];
 
 void evt_callback(u8 status, u8* sa, const u8* data);
 void setup_hardware() {
-  Serial.begin(57600);
-  swSerial.begin(9600);
-
-  Serial.println();
-  led.init();
-  delay(50);
-  Serial.println();
-  Serial.print(F("Starting Application... at ("));
-  Serial.print(millis());
-  Serial.println("ms)");
-
-  str2Hex(token.c_str(), tokenHex);
-  Serial.println(tokenHex);
-  nb.setDebugStream(&Serial);
-
-  nb.onDeviceReboot([]() {
-    Serial.println(F("[user] Device rebooted."));
-    // nb.queryDeviceInfo();
-    // delay(1000);
-  }); nb.onDeviceReady([]() {
-    Serial.println("[user] Device Ready!");
-  });
-
-  nb.onDeviceInfo([](CMMC_NB_IoT::DeviceInfo device) {
-    Serial.print(F("# Module IMEI-->  "));
-    Serial.println(device.imei);
-    Serial.print(F("# Firmware ver-->  "));
-    Serial.println(device.firmware);
-    Serial.print(F("# IMSI SIM-->  "));
-    Serial.println(device.imsi);
-  });
-
-  nb.onMessageArrived([](char *text, size_t len, uint8_t socketId, char* ip, uint16_t port) {
-    char buffer[100];
-    sprintf(buffer, "++ [recv:] socketId=%u, ip=%s, port=%u, len=%d bytes (%lums)", socketId, ip, port, len, millis());
-    Serial.println(buffer);
-  });
-
-  nb.onConnecting([]() {
-    Serial.println("Connecting to NB-IoT...");
-    delay(500);
-  });
-
-  nb.onConnected([]() {
-    Serial.print("[user] NB-IoT Network connected at (");
-    Serial.print(millis());
-    Serial.println("ms)");
-    Serial.println(nb.createUdpSocket("103.20.205.85", 5683, UDPConfig::ENABLE_RECV));
-    Serial.println(nb.createUdpSocket("103.212.181.167", 55566, UDPConfig::ENABLE_RECV));
-    isNbConnected = 1;
-    delay(1000);
-  });
-
-  nb.rebootModule();
-  // nb.begin();
-  // nb.activate();
+  Serial.begin(9600);
 }
 
 void start_config_mode() {
@@ -114,11 +46,10 @@ void start_config_mode() {
 int counter = 0;
 
 #include <CMMC_RX_Parser.h>
-CMMC_RX_Parser parser(&swSerial);
+CMMC_RX_Parser parser(&Serial);
 
 uint32_t time;
-CMMC_PACKET_T pArr[30];
-int pArrIdx = 0;
+// CMMC_PACKET_T pArr[30];
 
 
 void setup()
@@ -173,8 +104,8 @@ void setup()
         wrapped.data.field9 = analogRead(A0) * 0.0051724137931034f * 100; 
         wrapped.sum = CMMC::checksum((uint8_t*) &wrapped, sizeof(wrapped) - sizeof(wrapped.sum));
         Serial.printf("sizeof wrapped packet = %d\r\n", sizeof(wrapped));
-        pArr[pArrIdx] = wrapped;
-        pArrIdx = (pArrIdx + 1) % 30;
+        // pArr[pArrIdx] = wrapped;
+        // pArrIdx = (pArrIdx + 1) % 30;
         // toHexString((u8*)  &wrapped, sizeof(CMMC_PACKET_T), (char*)espnowMsg);
         // Serial.write((byte*)&wrapped, sizeof(wrapped));
         // CMMC_Utils::dump((u8*)&wrapped, sizeof(wrapped));
@@ -208,50 +139,10 @@ void loop()
   }
 
   if (mode == BootMode::MODE_RUN) {
-    nb.loop();
     while (dirty) {
       Serial.printf("SENT SLEEP_TIME BACK = %u MINUTE\r\n", currentSleepTimeMinuteByte);
       espNow.send(mmm, &currentSleepTimeMinuteByte, 1);
-    }
-    if ( (pArrIdx > 0) && (isNbConnected)) {
-      char buffer[500];
-      char b[500];
-      Serial.printf("pArrIdx = %d\r\n", pArrIdx);
-      for (int i = pArrIdx - 1; i >= 0; i--) {
-        Serial.printf("reading idx = %d\r\n", i);
-        toHexString((u8*)  &pArr[i], sizeof(CMMC_PACKET_T), (char*)espnowMsg);
-        sprintf(b, "{\"payload\": \"%s\"}", espnowMsg);
-        str2Hex(b, buffer);
-        String p3 = "";
-        p3 += String("40");
-        p3 += String("020579");
-        p3 += String("b5");
-        p3 += String("4e42496f54"); // NB-IoT
-        p3 += String("0d");
-        p3 += String("17");
-        p3 +=  String(tokenHex);
-        p3 += String("ff");
-        p3 += String(buffer);
-        int rt = 0;
-        while (true) {
-          swSerial.flush();
-          if (nb.sendMessageHex(p3.c_str(), 0)) {
-            Serial.println(">> [ais] socket0: send ok.");
-            swSerial.flush();
-            pArrIdx--;
-            break;
-          }
-          else {
-            Serial.println(">> [ais] socket0: send failed.");
-            if (++rt > 5) {
-              swSerial.flush();
-              break;
-            }
-          }
-        }
-      }
-      prev = millis();
-    }
+    } 
   }
 
   ct.timeout_ms(5000);
