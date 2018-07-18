@@ -1,5 +1,4 @@
 #define CMMC_USE_ALIAS
-
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <CMMC_SimplePair.h>
@@ -10,46 +9,27 @@
 #include <CMMC_NB_IoT.h>
 #include "data_type.h"
 
-char* espnowMsg[300];
-
-void str2Hex(const char* text, char* buffer) {
-  size_t len = strlen(text);
-  for (int i = 0 ; i < len; i++) {
-    sprintf(buffer + i * 2, "%02x", text[i]);
-  }
-}
-
-void toHexString(const u8 array[], size_t len, char buffer[]) {
-  for (unsigned int i = 0; i < len; i++)
-  {
-    byte nib1 = (array[i] >> 4) & 0x0F;
-    byte nib2 = (array[i] >> 0) & 0x0F;
-    buffer[i * 2 + 0] = nib1  < 0xA ? '0' + nib1  : 'A' + nib1  - 0xA;
-    buffer[i * 2 + 1] = nib2  < 0xA ? '0' + nib2  : 'A' + nib2  - 0xA;
-  }
-  buffer[len * 2] = '\0';
-}
-
-u8 currentSleepTimeMinuteByte = 5;
 #include <SoftwareSerial.h>
-#define rxPin 12
-#define txPin 14
-
-bool serialBusy = false;
-bool dirty = false;
-
-bool flag = 0;
-String token = "c7f549d0-1858-11e8-8630-b33e669e2295";
-char tokenHex[100];
-
-// SoftwareSerial swSerial(rxPin, txPin, false, 128);
-SoftwareSerial swSerial(rxPin, txPin);
-CMMC_NB_IoT nb(&swSerial);
-
+#define rxPin                  12
+#define txPin                  14
 #define LED_PIN                 2
 #define BUTTON_PIN              0
-#define PROD_MODE_PIN         13
+#define PROD_MODE_PIN          13
 
+
+void str2Hex(const char* text, char* buffer);
+void toHexString(const u8 array[], size_t len, char buffer[]);
+
+char* espnowMsg[300];
+bool dirty = false;
+bool isNbConnected = false;
+u8 currentSleepTimeMinuteByte = 5; 
+//String token = "c7f549d0-1858-11e8-8630-b33e669e2295";
+String token = "b98ce7b0-185b-11e8-8630-b33e669e2295";
+char tokenHex[100];
+
+SoftwareSerial swSerial(rxPin, txPin);
+CMMC_NB_IoT nb(&swSerial);
 int mode;
 
 CMMC_SimplePair instance;
@@ -59,20 +39,7 @@ CMMC_LED led(LED_PIN, LOW);
 
 uint8_t mmm[6];
 
-void evt_callback(u8 status, u8* sa, const u8* data) {
-  if (status == 0) {
-    Serial.printf("[CSP_EVENT_SUCCESS] STATUS: %d\r\n", status);
-    Serial.printf("WITH KEY: ");
-    utils.dump(data, 16);
-    Serial.printf("WITH MAC: ");
-    utils.dump(sa, 6);
-    led.high();
-    ESP.reset();
-  }
-  else {
-    Serial.printf("[CSP_EVENT_ERROR] %d: %s\r\n", status, (const char*)data);
-  }
-}
+void evt_callback(u8 status, u8* sa, const u8* data);
 void setup_hardware() {
   Serial.begin(57600);
   swSerial.begin(9600);
@@ -123,9 +90,10 @@ void setup_hardware() {
     Serial.println("ms)");
     Serial.println(nb.createUdpSocket("103.20.205.85", 5683, UDPConfig::ENABLE_RECV));
     Serial.println(nb.createUdpSocket("103.212.181.167", 55566, UDPConfig::ENABLE_RECV));
-    flag = 1;
+    isNbConnected = 1;
     delay(1000);
   });
+
   nb.rebootModule();
   // nb.begin();
   // nb.activate();
@@ -149,7 +117,7 @@ int counter = 0;
 CMMC_RX_Parser parser(&swSerial);
 
 uint32_t time;
-CMMC_PACKET_T pArr[20];
+CMMC_PACKET_T pArr[30];
 int pArrIdx = 0;
 
 
@@ -195,7 +163,6 @@ void setup()
         CMMC::dump(macaddr, 6);
         memcpy(mmm, macaddr, 6);
         dirty = true;
-        serialBusy = true;
         led.toggle();
         static CMMC_PACKET_T wrapped;
         static CMMC_SENSOR_DATA_T packet;
@@ -203,10 +170,11 @@ void setup()
         memcpy(&wrapped.data, &packet, sizeof(packet));
         wrapped.ms = millis();
         wrapped.sleepTime = currentSleepTimeMinuteByte;
+        wrapped.data.field9 = analogRead(A0) * 0.0051724137931034f * 100; 
         wrapped.sum = CMMC::checksum((uint8_t*) &wrapped, sizeof(wrapped) - sizeof(wrapped.sum));
         Serial.printf("sizeof wrapped packet = %d\r\n", sizeof(wrapped));
         pArr[pArrIdx] = wrapped;
-        pArrIdx = (pArrIdx+1)%10;
+        pArrIdx = (pArrIdx + 1) % 30;
         // toHexString((u8*)  &wrapped, sizeof(CMMC_PACKET_T), (char*)espnowMsg);
         // Serial.write((byte*)&wrapped, sizeof(wrapped));
         // CMMC_Utils::dump((u8*)&wrapped, sizeof(wrapped));
@@ -214,7 +182,6 @@ void setup()
       });
 
       espNow.on_message_sent([](uint8_t *macaddr,  uint8_t status) {
-        serialBusy = false;
         dirty = false;
       });
     }
@@ -240,53 +207,51 @@ void loop()
     ESP.reset();
   }
 
-
-  nb.loop();
-  while (dirty) {
-    Serial.printf("SENT SLEEP_TIME BACK = %u MINUTE\r\n", currentSleepTimeMinuteByte);
-    espNow.send(mmm, &currentSleepTimeMinuteByte, 1);
-    delay(1);
-    char buffer[500];
-    char b[500];
-
-    // if (nb.sendMessageHex(p3.c_str(), 1)) {
-    //   Serial.println(">> [cmmc] socket1: send ok.");
-    // }
-    Serial.printf("pArrIdx = %d\r\n", pArrIdx);
-    for(int i=pArrIdx-1; i >= 0; i--){
-      Serial.printf("reading idx = %d\r\n", i);
-      toHexString((u8*)  &pArr[i], sizeof(CMMC_PACKET_T), (char*)espnowMsg);
-    sprintf(b, "{\"payload\": \"%s\"}", espnowMsg);
-    str2Hex(b, buffer);
-    String p3 = "";
-    p3 += String("40");
-    p3 += String("020579");
-    p3 += String("b5");
-    p3 += String("4e42496f54"); // NB-IoT
-    p3 += String("0d");
-    p3 += String("17");
-    p3 +=  String(tokenHex);
-    p3 += String("ff");
-    p3 += String(buffer);
-      int rt = 0;
-      while (true) {
-        swSerial.flush();
-        if (nb.sendMessageHex(p3.c_str(), 0)) {
-            Serial.println(">> [ais] socket0: send ok."); 
+  if (mode == BootMode::MODE_RUN) {
+    nb.loop();
+    while (dirty) {
+      Serial.printf("SENT SLEEP_TIME BACK = %u MINUTE\r\n", currentSleepTimeMinuteByte);
+      espNow.send(mmm, &currentSleepTimeMinuteByte, 1);
+    }
+    if ( (pArrIdx > 0) && (isNbConnected)) {
+      char buffer[500];
+      char b[500];
+      Serial.printf("pArrIdx = %d\r\n", pArrIdx);
+      for (int i = pArrIdx - 1; i >= 0; i--) {
+        Serial.printf("reading idx = %d\r\n", i);
+        toHexString((u8*)  &pArr[i], sizeof(CMMC_PACKET_T), (char*)espnowMsg);
+        sprintf(b, "{\"payload\": \"%s\"}", espnowMsg);
+        str2Hex(b, buffer);
+        String p3 = "";
+        p3 += String("40");
+        p3 += String("020579");
+        p3 += String("b5");
+        p3 += String("4e42496f54"); // NB-IoT
+        p3 += String("0d");
+        p3 += String("17");
+        p3 +=  String(tokenHex);
+        p3 += String("ff");
+        p3 += String(buffer);
+        int rt = 0;
+        while (true) {
+          swSerial.flush();
+          if (nb.sendMessageHex(p3.c_str(), 0)) {
+            Serial.println(">> [ais] socket0: send ok.");
             swSerial.flush();
             pArrIdx--;
             break;
-        }
-        else {
-          Serial.println(">> [ais] socket0: send failed.");
-          if (++rt > 5) {
-            swSerial.flush();
-            break;
-          } 
+          }
+          else {
+            Serial.println(">> [ais] socket0: send failed.");
+            if (++rt > 5) {
+              swSerial.flush();
+              break;
+            }
+          }
         }
       }
+      prev = millis();
     }
-    prev = millis();
   }
 
   ct.timeout_ms(5000);
@@ -294,5 +259,38 @@ void loop()
     if (ct.is_timeout()) {
       ESP.reset();
     }
+  }
+}
+
+void str2Hex(const char* text, char* buffer) {
+  size_t len = strlen(text);
+  for (int i = 0 ; i < len; i++) {
+    sprintf(buffer + i * 2, "%02x", text[i]);
+  }
+}
+
+void toHexString(const u8 array[], size_t len, char buffer[]) {
+  for (unsigned int i = 0; i < len; i++)
+  {
+    byte nib1 = (array[i] >> 4) & 0x0F;
+    byte nib2 = (array[i] >> 0) & 0x0F;
+    buffer[i * 2 + 0] = nib1  < 0xA ? '0' + nib1  : 'A' + nib1  - 0xA;
+    buffer[i * 2 + 1] = nib2  < 0xA ? '0' + nib2  : 'A' + nib2  - 0xA;
+  }
+  buffer[len * 2] = '\0';
+}
+
+void evt_callback(u8 status, u8* sa, const u8* data) {
+  if (status == 0) {
+    Serial.printf("[CSP_EVENT_SUCCESS] STATUS: %d\r\n", status);
+    Serial.printf("WITH KEY: ");
+    utils.dump(data, 16);
+    Serial.printf("WITH MAC: ");
+    utils.dump(sa, 6);
+    led.high();
+    ESP.reset();
+  }
+  else {
+    Serial.printf("[CSP_EVENT_ERROR] %d: %s\r\n", status, (const char*)data);
   }
 }
