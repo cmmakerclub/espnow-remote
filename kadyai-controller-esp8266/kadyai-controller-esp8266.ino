@@ -6,16 +6,23 @@
 #include <CMMC_ESPNow.h>
 #include <CMMC_LED.h>
 #include <CMMC_BootMode.h>
+#include <CMMC_BootMode.h>
+#include <SoftwareSerial.h>
+
 #include "data_type.h"
 
 #define LED_PIN                 2
 #define BUTTON_PIN              0
 #define PROD_MODE_PIN          13
 
+#define rxPin                  12
+#define txPin                  14
+
+
 
 char* espnowMsg[300];
 bool dirty = false;
-u8 currentSleepTimeMinuteByte = 5; 
+u8 currentSleepTimeMinuteByte = 5;
 
 int mode;
 
@@ -25,10 +32,14 @@ CMMC_Utils utils;
 CMMC_LED led(LED_PIN, LOW);
 
 uint8_t mmm[6];
+SoftwareSerial swSerial(rxPin, txPin);
+
 
 void evt_callback(u8 status, u8* sa, const u8* data);
 void setup_hardware() {
   Serial.begin(9600);
+  swSerial.begin(9600);
+
 }
 
 void start_config_mode() {
@@ -36,7 +47,7 @@ void start_config_mode() {
   utils.printMacAddress(controller_addr);
   instance.begin(MASTER_MODE, evt_callback);
   instance.debug([](const char* s) {
-    Serial.println(s);
+    swSerial.println(s);
   });
   instance.set_message(controller_addr, 6);
   instance.start();
@@ -55,14 +66,14 @@ uint32_t time;
 void setup()
 {
   setup_hardware();
-  Serial.println("Controller Mode");
+  swSerial.println("Controller Mode");
   // parser.on_command_arrived([](CMMC_SERIAL_PACKET_T * packet, size_t len) {
-  //   Serial.printf("ON_PARSER at (%lums)", millis());
-  //   Serial.printf("CMD->0x%2x\r\n", packet->cmd);
-  //   Serial.printf("LEN->%lu\r\n", packet->len);
+  //  swSerial.printf("ON_PARSER at (%lums)", millis());
+  //  swSerial.printf("CMD->0x%2x\r\n", packet->cmd);
+  //  swSerial.printf("LEN->%lu\r\n", packet->len);
   //   CMMC::dump((u8*)packet->data, 4);
   //   CMMC::dump((u8*)packet->data+4, 4);
-  //   Serial.printf("HEAP = %lu\r\n", ESP.getFreeHeap());
+  //  swSerial.printf("HEAP = %lu\r\n", ESP.getFreeHeap());
   //   if (packet->cmd == CMMC_SLEEP_TIME_CMD) {
   //     memcpy(&time, packet->data, 4);
   //     currentSleepTimeMinuteByte = time;
@@ -77,20 +88,20 @@ void setup()
   if (digitalRead(PROD_MODE_PIN) == LOW) {
     wait_config = 0;
   }
-  Serial.printf("wait_config = %d \r\n", wait_config);
+  swSerial.printf("wait_config = %d \r\n", wait_config);
   CMMC_BootMode bootMode(&mode, BUTTON_PIN);
   bootMode.init();
   bootMode.check([](int mode) {
-    Serial.printf("done.... mode = %d \r\n", mode);
+    swSerial.printf("done.... mode = %d \r\n", mode);
     if (mode == BootMode::MODE_CONFIG) {
       start_config_mode();
     }
     else if (mode == BootMode::MODE_RUN) {
       led.high();
-      Serial.print("Initializing... Controller..");
+      swSerial.print("Initializing... Controller..");
       espNow.init(NOW_MODE_CONTROLLER);
       espNow.on_message_recv([](uint8_t *macaddr, uint8_t *data, uint8_t len) {
-        Serial.print("FROM: ");
+        swSerial.print("FROM: ");
         CMMC::dump(macaddr, 6);
         memcpy(mmm, macaddr, 6);
         dirty = true;
@@ -101,15 +112,15 @@ void setup()
         memcpy(&wrapped.data, &packet, sizeof(packet));
         wrapped.ms = millis();
         wrapped.sleepTime = currentSleepTimeMinuteByte;
-        wrapped.data.field9 = analogRead(A0) * 0.0051724137931034f * 100; 
+        wrapped.data.field9 = analogRead(A0) * 0.0051724137931034f * 100;
         wrapped.sum = CMMC::checksum((uint8_t*) &wrapped, sizeof(wrapped) - sizeof(wrapped.sum));
-        Serial.printf("sizeof wrapped packet = %d\r\n", sizeof(wrapped));
+        swSerial.printf("sizeof wrapped packet = %d\r\n", sizeof(wrapped));
         // pArr[pArrIdx] = wrapped;
         // pArrIdx = (pArrIdx + 1) % 30;
         // toHexString((u8*)  &wrapped, sizeof(CMMC_PACKET_T), (char*)espnowMsg);
-        // Serial.write((byte*)&wrapped, sizeof(wrapped));
+        swSerial.write((byte*)&wrapped, sizeof(wrapped));
         // CMMC_Utils::dump((u8*)&wrapped, sizeof(wrapped));
-        // Serial.println(swSerial.write((byte*)&wrapped, sizeof(wrapped)));
+        //swSerial.println(swSerial.write((byte*)&wrapped, sizeof(wrapped)));
       });
 
       espNow.on_message_sent([](uint8_t *macaddr,  uint8_t status) {
@@ -134,15 +145,15 @@ void loop()
       delay(500);
       led.toggle();
     }
-    Serial.println("Simple Pair Wait timeout.");
+    swSerial.println("Simple Pair Wait timeout.");
     ESP.reset();
   }
 
   if (mode == BootMode::MODE_RUN) {
     while (dirty) {
-      Serial.printf("SENT SLEEP_TIME BACK = %u MINUTE\r\n", currentSleepTimeMinuteByte);
+      swSerial.printf("SENT SLEEP_TIME BACK = %u MINUTE\r\n", currentSleepTimeMinuteByte);
       espNow.send(mmm, &currentSleepTimeMinuteByte, 1);
-    } 
+    }
   }
 
   ct.timeout_ms(5000);
@@ -173,15 +184,15 @@ void toHexString(const u8 array[], size_t len, char buffer[]) {
 
 void evt_callback(u8 status, u8* sa, const u8* data) {
   if (status == 0) {
-    Serial.printf("[CSP_EVENT_SUCCESS] STATUS: %d\r\n", status);
-    Serial.printf("WITH KEY: ");
+    swSerial.printf("[CSP_EVENT_SUCCESS] STATUS: %d\r\n", status);
+    swSerial.printf("WITH KEY: ");
     utils.dump(data, 16);
-    Serial.printf("WITH MAC: ");
+    swSerial.printf("WITH MAC: ");
     utils.dump(sa, 6);
     led.high();
     ESP.reset();
   }
   else {
-    Serial.printf("[CSP_EVENT_ERROR] %d: %s\r\n", status, (const char*)data);
+    swSerial.printf("[CSP_EVENT_ERROR] %d: %s\r\n", status, (const char*)data);
   }
 }
