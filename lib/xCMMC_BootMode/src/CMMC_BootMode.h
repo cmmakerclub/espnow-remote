@@ -31,6 +31,8 @@ class CMMC_BootMode
 
       // constructor
       CMMC_BootMode() {
+        _user_debug_cb = [](const char* message) {};
+        _user_boot_mode_cb = [](int mode) {};
       }
 
       CMMC_BootMode(int *mode, int button_pin = 0) {
@@ -42,12 +44,13 @@ class CMMC_BootMode
       ~CMMC_BootMode() {}
 
       void init();
-      void save();
-      void load();
       void check(cmmc_boot_mode_cb_t mode = NULL, uint32_t wait = 2000);
+      void debug(cmmc_debug_cb_t);
       uint32_t calculateCRC32(const uint8_t *data, size_t length);
       void printMemory();
     private:
+      cmmc_debug_cb_t _user_debug_cb;
+      cmmc_boot_mode_cb_t _user_boot_mode_cb;
       int *_target_mode = NULL;
       int _button_pin = 0;
       rtcData x;
