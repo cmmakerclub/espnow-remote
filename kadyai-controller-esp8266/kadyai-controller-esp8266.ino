@@ -18,8 +18,6 @@
 #define rxPin                  12
 #define txPin                  14
 
-
-
 char* espnowMsg[300];
 bool dirty = false;
 u8 currentSleepTimeMinuteByte = 5;
@@ -34,13 +32,7 @@ CMMC_LED led(LED_PIN, LOW);
 uint8_t mmm[6];
 SoftwareSerial swSerial(rxPin, txPin);
 
-
 void evt_callback(u8 status, u8* sa, const u8* data);
-void setup_hardware() {
-  Serial.begin(9600);
-  swSerial.begin(9600);
-
-}
 
 void start_config_mode() {
   uint8_t* controller_addr = utils.getESPNowControllerMacAddress();
@@ -50,23 +42,26 @@ void start_config_mode() {
     swSerial.println(s);
   });
   instance.set_message(controller_addr, 6);
+
   instance.start();
 }
 
 
 int counter = 0;
-
 #include <CMMC_RX_Parser.h>
 CMMC_RX_Parser parser(&Serial);
 
-uint32_t time;
+uint32_t _time;
 // CMMC_PACKET_T pArr[30];
 
 
 void setup()
 {
-  setup_hardware();
+  Serial.begin(9600);
+  swSerial.begin(9600);
   swSerial.println("Controller Mode");
+  Serial.println("Controller Mode");
+  led.init();
   // parser.on_command_arrived([](CMMC_SERIAL_PACKET_T * packet, size_t len) {
   //  swSerial.printf("ON_PARSER at (%lums)", millis());
   //  swSerial.printf("CMD->0x%2x\r\n", packet->cmd);
@@ -92,7 +87,6 @@ void setup()
   CMMC_BootMode bootMode(&mode, BUTTON_PIN);
   bootMode.init();
   bootMode.check([](int mode) {
-    swSerial.printf("done.... mode = %d \r\n", mode);
     if (mode == BootMode::MODE_CONFIG) {
       start_config_mode();
     }
@@ -102,7 +96,7 @@ void setup()
       espNow.init(NOW_MODE_CONTROLLER);
       espNow.on_message_recv([](uint8_t *macaddr, uint8_t *data, uint8_t len) {
         swSerial.print("FROM: ");
-        CMMC::dump(macaddr, 6);
+        // CMMC::dump(macaddr, 6);
         memcpy(mmm, macaddr, 6);
         dirty = true;
         led.toggle();
@@ -118,7 +112,7 @@ void setup()
         // pArr[pArrIdx] = wrapped;
         // pArrIdx = (pArrIdx + 1) % 30;
         // toHexString((u8*)  &wrapped, sizeof(CMMC_PACKET_T), (char*)espnowMsg);
-        swSerial.write((byte*)&wrapped, sizeof(wrapped));
+        Serial.write((byte*)&wrapped, sizeof(wrapped));
         // CMMC_Utils::dump((u8*)&wrapped, sizeof(wrapped));
         //swSerial.println(swSerial.write((byte*)&wrapped, sizeof(wrapped)));
       });
@@ -153,6 +147,13 @@ void loop()
     while (dirty) {
       swSerial.printf("SENT SLEEP_TIME BACK = %u MINUTE\r\n", currentSleepTimeMinuteByte);
       espNow.send(mmm, &currentSleepTimeMinuteByte, 1);
+    }
+  }
+
+  while(Serial.available()) {
+    u8 incomingByte = Serial.read();
+    if (incomingByte < 255 && (incomingByte >0)) {
+      currentSleepTimeMinuteByte = incomingByte;
     }
   }
 
