@@ -25,6 +25,13 @@ extern "C" {
 
 #include "data_type.h"
 
+uint8_t self_mac[6];
+uint8_t master_mac[6];
+uint8_t slave_mac[6];
+
+char self_mac_string[13];
+char slave_mac_string[13];
+
 #define LED_PIN                 (16)
 #define BUTTON_PIN              (0)
 
@@ -74,24 +81,22 @@ uint32_t _time;
 void tripleClick(Button2& btn) {
     Serial.println("triple click\n");
     blinker.attach_ms(100, flip);
+    // esp_now_deinit();
     start_config_mode();
 }
 
-uint8_t self_mac[6];
-uint8_t master_mac[6];
-
 bool saveConfig() {
   StaticJsonDocument<200> doc;
-  doc["serverName"] = "api.example.com";
-  doc["accessToken"] = "128du9as8du12eoue8da98h123ueh9h98";
-
+  doc["slave_mac"] = String(slave_mac_string);
   File configFile = LittleFS.open("config.json", "w");
   if (!configFile) {
     Serial.println("Failed to open config file for writing");
     return false;
   }
+
   Serial.print(F("Serializing to file. Size = "));
   uint16 size = serializeJson(doc, configFile);
+
   Serial.println(size);
   configFile.close();
   return true;
@@ -127,41 +132,77 @@ void setup()
 
    // saveConfig();
    listDir("/");
+   loadConfig();
 
 
   // char buf[13];
-  char self_mac_string[13];
-  uint8_t* slave_addr = CMMC::getESPNowSlaveMacAddress();
-  memcpy(self_mac, slave_addr, 6);
+  uint8_t* self_mac_ptr = CMMC::getESPNowSlaveMacAddress();
+  memcpy(self_mac, self_mac_ptr, 6);
   Serial.println();
   Serial.printf("WITH MAC: ");
-  CMMC::printMacAddress((uint8_t*)slave_addr);
+  CMMC::printMacAddress((uint8_t*)self_mac_ptr);
   CMMC::macByteToString(self_mac, self_mac_string);
   Serial.println("Controller Mode");
   Serial.println(self_mac_string);
   led.init();
   button.setDoubleClickHandler(tripleClick);
-  uint32_t wait_config = 1000;
+
 
   espNow.init(NOW_MODE_CONTROLLER);
-  espNow.enable_retries(true);
-  // static CMMC_LED *led;
-  // static ESPNowModule* module;
-  // led = ((CMMC_Legend*) os)->getBlinker();
-  // led->detach();
+  espNow.enable_retries(false);
   espNow.on_message_sent([](uint8_t *macaddr, u8 status) {
+    Serial.println("recv");
     led.toggle();
   });
   // module = this;
   espNow.on_message_recv([](uint8_t * macaddr, uint8_t * data, uint8_t len) {
-    Serial.println("on recv");
     // user_espnow_sent_at = millis();
     led.toggle();
-    // Serial.printf("RECV: len = %u byte, sleepTime = %lu at(%lu ms)\r\n", len, data[0], millis());
-    // module->_go_sleep(data[0]);
   });
 
 }
+
+bool loadConfig() {
+  File configFile = LittleFS.open("config.json", "r");
+  if (!configFile) {
+    Serial.println("Failed to open config file");
+    return false;
+  }
+
+  size_t size = configFile.size();
+  if (size > 1024) {
+    Serial.println("Config file size is too large");
+    return false;
+  }
+
+  // Allocate a buffer to store contents of the file.
+  std::unique_ptr<char[]> buf(new char[size]);
+
+  // We don't use String here because ArduinoJson library requires the input
+  // buffer to be mutable. If you don't use ArduinoJson, you may as well
+  // use configFile.readString instead.
+  configFile.readBytes(buf.get(), size);
+
+  // Serial.println(String(buf));
+
+  StaticJsonDocument<200> doc;
+  auto error = deserializeJson(doc, buf.get());
+  if (error) {
+    Serial.println("Failed to parse config file");
+    return false;
+  }
+
+  const char* mac = doc["slave_mac"];
+  Serial.print("MAC=");
+  Serial.println(mac);
+
+
+  // Real world application would store these values in some variables for
+  // later use.
+
+  return true;
+}
+
 
 #include <CMMC_TimeOut.h>
 CMMC_TimeOut ct;
@@ -197,8 +238,13 @@ void evt_callback(u8 status, u8* sa, const u8* data) {
     utils.dump(data, 16);
     Serial.printf("WITH MAC: ");
     utils.dump(sa, 6);
+  // uint8_t* self_mac_ptr = CMMC::getESPNowSlaveMacAddress();
+  // memcpy(self_mac, self_mac_ptr, 6);
+    memcpy(slave_mac, sa, 6);
+    CMMC::macByteToString(slave_mac, slave_mac_string);
+    saveConfig();
     led.high();
-    // ESP.reset();
+    ESP.reset();
   }
   else {
     Serial.printf("[CSP_EVENT_ERROR] %d: %s\r\n", status, (const char*)data);
