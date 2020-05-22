@@ -31,6 +31,7 @@ uint8_t slave_mac[6];
 
 char self_mac_string[13];
 char slave_mac_string[13];
+uint32_t recv_count = 0;
 
 #define LED_PIN                 (16)
 #define BUTTON_PIN              (0)
@@ -81,7 +82,7 @@ uint32_t _time;
 void tripleClick(Button2& btn) {
     Serial.println("triple click\n");
     blinker.attach_ms(100, flip);
-    // esp_now_deinit();
+    esp_now_deinit();
     start_config_mode();
 }
 
@@ -120,8 +121,11 @@ void listDir(const char * dirname) {
 void setup()
 {
   Serial.begin(115200);
-  WiFi.disconnect();
-  WiFi.mode(WIFI_AP); // Station mode for esp-now controller
+  delay(10);
+  WiFi.disconnect(true);
+  WiFi.softAPdisconnect();
+  // WiFi.mode(WIFI_STA); // Station mode for esp-now controller
+  // wifi_set_opmode(SOFTAP_MODE);
   LittleFS.begin();
   // File configFile = LittleFS.open("mac.json", "w");
   Serial.println("Mounting FS...");
@@ -135,6 +139,8 @@ void setup()
    loadConfig();
 
 
+  led.init();
+  led.low();
   // char buf[13];
   uint8_t* self_mac_ptr = CMMC::getESPNowSlaveMacAddress();
   memcpy(self_mac, self_mac_ptr, 6);
@@ -144,18 +150,19 @@ void setup()
   CMMC::macByteToString(self_mac, self_mac_string);
   Serial.println("Controller Mode");
   Serial.println(self_mac_string);
-  led.init();
-  button.setDoubleClickHandler(tripleClick);
 
+  button.setDoubleClickHandler(tripleClick);
 
   espNow.init(NOW_MODE_CONTROLLER);
   espNow.enable_retries(false);
   espNow.on_message_sent([](uint8_t *macaddr, u8 status) {
-    Serial.println("recv");
     led.toggle();
   });
+
   // module = this;
   espNow.on_message_recv([](uint8_t * macaddr, uint8_t * data, uint8_t len) {
+    recv_count++;
+    // Serial.println("recv");
     // user_espnow_sent_at = millis();
     led.toggle();
   });
@@ -211,6 +218,11 @@ uint32_t prev = millis();
 void loop()
 {
   button.loop();
+  if (millis() % 2000 == 0) {
+    Serial.println(recv_count/2);
+    recv_count = 0;
+    delay(10);
+  }
 }
 
 void str2Hex(const char* text, char* buffer) {

@@ -25,7 +25,7 @@ void CMMC_ESPNow::init(int mode) {
     WiFi.mode(WIFI_STA);
   }
   else {
-    WiFi.mode(WIFI_STA);
+    WiFi.mode(WIFI_AP);
   }
 
   if (esp_now_init() == 0) {
