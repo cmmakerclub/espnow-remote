@@ -107,20 +107,16 @@ void listDir(const char * dirname) {
     Serial.print("  FILE: ");
     Serial.print(root.fileName());
     Serial.print("  SIZE: ");
-    Serial.print(file.size());
+    Serial.println(file.size());
     file.close();
-    // struct tm * tmstruct = localtime(&cr);
-    // Serial.printf("    CREATION: %d-%02d-%02d %02d:%02d:%02d\n", (tmstruct->tm_year) + 1900, (tmstruct->tm_mon) + 1, tmstruct->tm_mday, tmstruct->tm_hour, tmstruct->tm_min, tmstruct->tm_sec);
-    // tmstruct = localtime(&lw);
-    // Serial.printf("  LAST WRITE: %d-%02d-%02d %02d:%02d:%02d\n", (tmstruct->tm_year) + 1900, (tmstruct->tm_mon) + 1, tmstruct->tm_mday, tmstruct->tm_hour, tmstruct->tm_min, tmstruct->tm_sec);
   }
 }
 
 void setup()
 {
   Serial.begin(115200);
-  WiFi.mode(WIFI_STA); // Station mode for esp-now controller
   WiFi.disconnect();
+  WiFi.mode(WIFI_AP); // Station mode for esp-now controller
   LittleFS.begin();
   // File configFile = LittleFS.open("mac.json", "w");
   Serial.println("Mounting FS...");
@@ -137,84 +133,34 @@ void setup()
   char self_mac_string[13];
   uint8_t* slave_addr = CMMC::getESPNowSlaveMacAddress();
   memcpy(self_mac, slave_addr, 6);
-
   Serial.println();
   Serial.printf("WITH MAC: ");
   CMMC::printMacAddress((uint8_t*)slave_addr);
   CMMC::macByteToString(self_mac, self_mac_string);
-  // CMMC::printMacAddress((uint8_t*)self_mac_string);
-  // Serial.begin(9600);
-  // Serial.println("Controller Mode");
   Serial.println("Controller Mode");
   Serial.println(self_mac_string);
   led.init();
   button.setDoubleClickHandler(tripleClick);
-
-  // blinker.attach_ms(100, flip);
-  // parser.on_command_arrived([](CMMC_SERIAL_PACKET_T * packet, size_t len) {
-  //  swSerial.printf("ON_PARSER at (%lums)", millis());
-  //  swSerial.printf("CMD->0x%2x\r\n", packet->cmd);
-  //  swSerial.printf("LEN->%lu\r\n", packet->len);
-  //   CMMC::dump((u8*)packet->data, 4);
-  //   CMMC::dump((u8*)packet->data+4, 4);
-  //  swSerial.printf("HEAP = %lu\r\n", ESP.getFreeHeap());
-  //   if (packet->cmd == CMMC_SLEEP_TIME_CMD) {
-  //     memcpy(&time, packet->data, 4);
-  //     currentSleepTimeMinuteByte = time;
-  //     if (time > 255) {
-  //       currentSleepTimeMinuteByte = 254;
-  //     }
-  //   }
-  // });
-
   uint32_t wait_config = 1000;
-  // pinMode(PROD_MODE_PIN, INPUT_PULLUP);
-  // uint32_t wait_config = 1000;
-  // if (digitalRead(PROD_MODE_PIN) == LOW) {
-  //   wait_config = 0;
-  // }
 
-  // Serial.printf("wait_config = %d \r\n", wait_config);
-  // CMMC_BootMode bootMode(&mode, BUTTON_PIN);
-  // bootMode.init();
-  // bootMode.check([](int mode) {
-  //   if (mode == BootMode::MODE_CONFIG) {
-  //     start_config_mode();
-  //   }
-  //   else if (mode == BootMode::MODE_RUN) {
-  //     led.high();
-  //     Serial.print("Initializing... Controller..");
-  //     espNow.init(NOW_MODE_CONTROLLER);
-  //     espNow.on_message_recv([](uint8_t *macaddr, uint8_t *data, uint8_t len) {
-  //       Serial.print("FROM: ");
-  //       // CMMC::dump(macaddr, 6);
-  //       memcpy(mmm, macaddr, 6);
-  //       dirty = true;
-  //       led.toggle();
-  //       static CMMC_PACKET_T wrapped;
-  //       static CMMC_SENSOR_DATA_T packet;
-  //       memcpy(&packet, data, sizeof(packet));
-  //       memcpy(&wrapped.data, &packet, sizeof(packet));
-  //       wrapped.ms = millis();
-  //       wrapped.sleepTime = currentSleepTimeMinuteByte;
-  //       wrapped.data.field9 = analogRead(A0) * 0.0051724137931034f * 100;
-  //       wrapped.sum = CMMC::checksum((uint8_t*) &wrapped, sizeof(wrapped) - sizeof(wrapped.sum));
-  //       Serial.printf("sizeof wrapped packet = %d\r\n", sizeof(wrapped));
-  //       // pArr[pArrIdx] = wrapped;
-  //       // pArrIdx = (pArrIdx + 1) % 30;
-  //       // toHexString((u8*)  &wrapped, sizeof(CMMC_PACKET_T), (char*)espnowMsg);
-  //       // CMMC_Utils::dump((u8*)&wrapped, sizeof(wrapped));
-  //       //swSerial.println(swSerial.write((byte*)&wrapped, sizeof(wrapped)));
-  //     });
-  //
-  //     espNow.on_message_sent([](uint8_t *macaddr,  uint8_t status) {
-  //       dirty = false;
-  //     });
-  //   }
-  //   else {
-  //     // unhandled
-  //   }
-  // }, wait_config);
+  espNow.init(NOW_MODE_CONTROLLER);
+  espNow.enable_retries(true);
+  // static CMMC_LED *led;
+  // static ESPNowModule* module;
+  // led = ((CMMC_Legend*) os)->getBlinker();
+  // led->detach();
+  espNow.on_message_sent([](uint8_t *macaddr, u8 status) {
+    led.toggle();
+  });
+  // module = this;
+  espNow.on_message_recv([](uint8_t * macaddr, uint8_t * data, uint8_t len) {
+    Serial.println("on recv");
+    // user_espnow_sent_at = millis();
+    led.toggle();
+    // Serial.printf("RECV: len = %u byte, sleepTime = %lu at(%lu ms)\r\n", len, data[0], millis());
+    // module->_go_sleep(data[0]);
+  });
+
 }
 
 #include <CMMC_TimeOut.h>
@@ -224,37 +170,6 @@ uint32_t prev = millis();
 void loop()
 {
   button.loop();
-
-  // while (mode == BootMode::MODE_CONFIG) {
-  //   ct.timeout_ms(60000);
-  //   while (1 && !ct.is_timeout()) {
-  //     delay(500);
-  //     led.toggle();
-  //   }
-  //   swSerial.println("Simple Pair Wait timeout.");
-  //   ESP.reset();
-  // }
-
-  // if (mode == BootMode::MODE_RUN) {
-  //   while (dirty) {
-  //     swSerial.printf("SENT SLEEP_TIME BACK = %u MINUTE\r\n", currentSleepTimeMinuteByte);
-  //     espNow.send(mmm, &currentSleepTimeMinuteByte, 1);
-  //   }
-  // }
-
-  // while(Serial.available()) {
-  //   u8 incomingByte = Serial.read();
-  //   if (incomingByte < 255 && (incomingByte >0)) {
-  //     currentSleepTimeMinuteByte = incomingByte;
-  //   }
-  // }
-
-  // ct.timeout_ms(5000);
-  // while (digitalRead(13) == LOW) {
-  //   if (ct.is_timeout()) {
-  //     ESP.reset();
-  //   }
-  // }
 }
 
 void str2Hex(const char* text, char* buffer) {
@@ -283,7 +198,7 @@ void evt_callback(u8 status, u8* sa, const u8* data) {
     Serial.printf("WITH MAC: ");
     utils.dump(sa, 6);
     led.high();
-    ESP.reset();
+    // ESP.reset();
   }
   else {
     Serial.printf("[CSP_EVENT_ERROR] %d: %s\r\n", status, (const char*)data);

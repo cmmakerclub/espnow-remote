@@ -19,8 +19,8 @@ enum CMMC_SimplePair_event_t {
     CSP_EVENT_SUCCESS, CSP_EVENT_ERROR
 };
 
+#define CSP_DEBUG_BUFFER 240
 #ifndef CSP_DEBUG_BUFFER
-  #define CSP_DEBUG_BUFFER 120
 #endif
 
 #define MASTER_MODE CSP_MODE_AP
@@ -60,6 +60,7 @@ class CMMC_SimplePair
       void debug(cmmc_debug_cb_t);
       void on(CMMC_SimplePair_event_t evt, cmmc_simple_pair_status_cb_t cb);
       int mode();
+      static void scan_done_cb (void* arg, STATUS status);
   private:
       char _debug_buffer[CSP_DEBUG_BUFFER];
       u8 _pair_key[16] = {0xff, 0x63, 0x6d, 0x6d, 0x63, 0x04, 0x05, 0x06, 0x07,

@@ -57,6 +57,34 @@ void CMMC_SimplePair::on(CMMC_SimplePair_event_t evt, cmmc_simple_pair_status_cb
     // TODO: handle invalid type
   }
 }
+void CMMC_SimplePair::scan_done_cb (void* arg, STATUS status)
+{
+    // struct bss_info *bssInfo = (struct bss_info*)arg;
+    // bssInfo = STAILQ_NEXT(bssInfo, next);
+    // char buf[100];
+    //
+    // if (status == OK) {
+    //   Serial.println("STATUS_OK");
+    //     while (bssInfo != NULL) {
+    //       Serial.println("XXX");
+    //           sprintf(buf, "%-32s %02X:%02X:%02X:%02X:%02X:%02X, ch %2d, auth %d, hid %d, rssi %d\n\r",
+    //                      bssInfo->ssid,
+    //                      bssInfo->bssid[0], bssInfo->bssid[1], bssInfo->bssid[2],
+    //                      bssInfo->bssid[3], bssInfo->bssid[4], bssInfo->bssid[5],
+    //                      bssInfo->channel,
+    //                      bssInfo->authmode, bssInfo->is_hidden,
+    //                      bssInfo->rssi);
+    //           Serial.println(buf);
+    //           bssInfo = STAILQ_NEXT(bssInfo, next);
+    //     }
+    //
+    //
+    // }
+    // else {
+    //   Serial.println("NOT STATUS_OK");
+    // }
+    //
+  }
 
 void CMMC_SimplePair::_simple_pair_init() {
   int ret;
@@ -115,6 +143,111 @@ void CMMC_SimplePair::_simple_pair_init() {
       /* scan ap to searh which ap is ready to simple pair */
       sprintf(this->_debug_buffer, "Simple Pair: STA Scan AP ...");
       debug_cb(this->_debug_buffer);
+      // void ESP8266WiFiScanClass::_scanDone(void* result, int status) {
+      //   if(status != OK) {
+      //       ESP8266WiFiScanClass::_scanCount = 0;
+      //       ESP8266WiFiScanClass::_scanResult = 0;
+      //   } else {
+
+      //       int i = 0;
+      //       bss_info* head = reinterpret_cast<bss_info*>(result);
+
+      //       for(bss_info* it = head; it; it = STAILQ_NEXT(it, next), ++i)
+      //           ;
+      //       ESP8266WiFiScanClass::_scanCount = i;
+      //       if(i == 0) {
+      //           ESP8266WiFiScanClass::_scanResult = 0;
+      //       } else {
+      //           bss_info* copied_info = new bss_info[i];
+      //           i = 0;
+      //           for(bss_info* it = head; it; it = STAILQ_NEXT(it, next), ++i) {
+      //               memcpy(copied_info + i, it, sizeof(bss_info));
+      //           }
+
+      //           ESP8266WiFiScanClass::_scanResult = copied_info;
+      //       }
+
+      //   }
+      auto fun = [](void* result, int status) {
+        if(status != OK) {
+          Serial.println("NOT OK");
+            // ESP8266WiFiScanClass::_scanCount = 0;
+            // ESP8266WiFiScanClass::_scanResult = 0;
+        } else {
+          Serial.println("OK!");
+            // int i = 0;
+            // bss_info* head = reinterpret_cast<bss_info*>(result);
+
+            // for(bss_info* it = head; it; it = STAILQ_NEXT(it, next), ++i)
+            //     ;
+          // Serial.printf("Scan count = %d\r\n", i);
+        };
+      };
+    //       struct scan_config sc;
+    // sc.ssid = NULL;
+    // sc.bssid = NULL;
+    // sc.channel = 0;
+    // sc.show_hidden = 1;
+    //  int n = WiFi.scanNetworks();
+    //   Serial.println("scan done");
+    //   if (n == 0) {
+    //     Serial.println("no networks found");
+    //   } else {
+    //     Serial.print(n);
+    //     Serial.println(" networks found");
+    //     for (int i = 0; i < n; ++i) {
+    //       // Print SSID and RSSI for each network found
+    //       Serial.print(i + 1);
+    //       Serial.print(": ");
+    //       Serial.print(WiFi.SSID(i));
+    //       Serial.print(" (");
+    //       Serial.print(WiFi.RSSI(i));
+    //       Serial.print(")");
+    //       Serial.println((WiFi.encryptionType(i) == ENC_TYPE_NONE) ? " " : "*");
+    //       delay(10);
+    //     }
+    //   }
+    //   Serial.println("");
+
+    //   for(int8_t i = 0; i < n; ++i) {
+    //     String ssid_scan;
+    //     int32_t rssi_scan;
+    //     uint8_t sec_scan;
+    //     uint8_t* BSSID_scan;
+    //     int32_t chan_scan;
+    //     bool hidden_scan;
+
+    //     WiFi.getNetworkInfo(i, ssid_scan, sec_scan, rssi_scan, BSSID_scan, chan_scan, hidden_scan);
+    //     Serial.println("SCAN RESULT..");
+    //   }
+
+    //   wifi_station_scan(&sc, reinterpret_cast<scan_done_cb_t>(&(CMMC_SimplePair::scan_done_cb)));
+      // WiFi.scanNetworks();
+// void prinScanResult(int networksFound)
+// {
+//   Serial.printf("%d network(s) found\n", networksFound);
+//   for (int i = 0; i < networksFound; i++)
+//   {
+//     Serial.printf("%d: %s, Ch:%d (%ddBm) %s\n", i + 1, WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.RSSI(i), WiFi.encryptionType(i) == ENC_TYPE_NONE ? "open" : "");
+//   }
+// }
+      // if(wifi_station_scan(NULL, reinterpret_cast<scan_done_cb_t>(&fun))) {
+      //   Serial.println("IN INF");
+      // }
+
+    //     // ESP8266WiFiScanClass::_scanComplete = false;
+    //     // ESP8266WiFiScanClass::_scanStarted = true;
+
+    //     // if(ESP8266WiFiScanClass::_scanAsync) {
+    //     //     delay(0); // time for the OS to trigger the scan
+    //     //     return WIFI_SCAN_RUNNING;
+    //     // }
+
+    //     // esp_yield(); // will resume when _scanDone fires
+    //     // return ESP8266WiFiScanClass::_scanCount;
+    // } else {
+    //     // return WIFI_SCAN_FAILED;
+    // }
       wifi_station_scan(NULL, [](void *arg, STATUS status) {
         int ret;
         if (status == OK) {
@@ -126,7 +259,7 @@ void CMMC_SimplePair::_simple_pair_init() {
             String rssi = String(bss_link->rssi);
             String auth_mode = String(bss_link->authmode);
 
-            sprintf(_this->_debug_buffer, "%s (%s, %s)", ssid.c_str(),
+            sprintf(_this->_debug_buffer, "[res] %s (%s, %s)", ssid.c_str(),
               rssi.c_str(), auth_mode.c_str());
             _this->debug_cb(_this->_debug_buffer);
 
@@ -148,9 +281,10 @@ void CMMC_SimplePair::_simple_pair_init() {
               break;
             }
             // bss_link = bss_link->next->stqe_next;
-            _this->debug_cb("next...");
             // bss_link = bss_link->next;
+              bss_link = STAILQ_NEXT(bss_link, next);
           }
+          Serial.println("DONE!");
         } else {
           sprintf(_this->_debug_buffer, "err, scan status %d", status);
           _this->debug_cb(_this->_debug_buffer);
@@ -185,7 +319,7 @@ void CMMC_SimplePair::debug(cmmc_debug_cb_t cb) {
     this->_user_debug_cb = cb;
   }
 }
-void CMMC_SimplePair:: _preconfig_wifi_status(CMMC_SimplePair_mode_t mode) {
+void CMMC_SimplePair::_preconfig_wifi_status(CMMC_SimplePair_mode_t mode) {
     if (mode == CSP_MODE_AP) {
       WiFi.disconnect(0);
       WiFi.mode(WIFI_AP);
@@ -215,6 +349,8 @@ void CMMC_SimplePair::begin(CMMC_SimplePair_mode_t mode, u8 *pairkey, u8 *msg) {
 
     this->_sp_callback = [](u8 *sa, u8 status) {
         sprintf(_this->_debug_buffer, "event %d", status);
+        Serial.print("XXQQYY: status: ");
+        Serial.println(status);
         _this->debug_cb(_this->_debug_buffer);
         _this->_user_sp_callback(sa, status);
         switch (status) {

@@ -29,9 +29,9 @@ void CMMC_ESPNow::init(int mode) {
   }
 
   if (esp_now_init() == 0) {
-		USER_DEBUG_PRINTF("espnow init ok");
+		DEBUG_PRINTF("espnow init ok");
   } else {
-		USER_DEBUG_PRINTF("espnow init failed");
+		DEBUG_PRINTF("espnow init failed");
     ESP.restart();
     return;
   }
@@ -60,7 +60,7 @@ void CMMC_ESPNow::send(uint8_t *mac, u8* data, int len, void_cb_t cb, uint32_t w
 
   if (this->_enable_retries) {
     while(this->_message_sent_status != 0) {
-      USER_DEBUG_PRINTF("try to send over espnow...");
+      DEBUG_PRINTF("try to send over espnow...");
       esp_now_send(mac, data, len);
       delay(RETRIES_DELAY);
       if (++retries > MAX_RETRIES) {
@@ -69,16 +69,16 @@ void CMMC_ESPNow::send(uint8_t *mac, u8* data, int len, void_cb_t cb, uint32_t w
     }
   }
 
-  if (cb != NULL) {
+  if (cb != NULL && wait_time > 0) {
     uint32_t timeout_at_ms = millis() + wait_time;
-    USER_DEBUG_PRINTF("timeout at %lu", timeout_at_ms);
-    USER_DEBUG_PRINTF("millis = %lu", millis());
+    DEBUG_PRINTF("timeout at %lu", timeout_at_ms);
+    DEBUG_PRINTF("millis = %lu", millis());
     while (millis() < timeout_at_ms) {
-      USER_DEBUG_PRINTF("Waiting a command message...");
+      DEBUG_PRINTF("Waiting a command message...");
       delay(RETRIES_DELAY);
     }
     if (this->_waiting_message_has_arrived==false) {
-      USER_DEBUG_PRINTF("Timeout... %d", _waiting_message_has_arrived);
+      DEBUG_PRINTF("Timeout... %d", _waiting_message_has_arrived);
       cb();
     }
   }
