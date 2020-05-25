@@ -141,50 +141,50 @@ void setup()
   led.init();
   Serial.begin(115200);
 
-    LittleFS.begin();
+  LittleFS.begin();
   // delay(2000);
   // delay(5000);
   // 60 01 94 3f f7 aa
-    // File configFile = LittleFS.open("mac.json", "w");
-    Serial.println("Mounting FS...");
-     if (!LittleFS.begin()) {
-       Serial.println("Failed to mount file system");
-       return;
-     }
-     // saveConfig();
-     listDir("/");
-     loadConfig();
+  // File configFile = LittleFS.open("mac.json", "w");
+  Serial.println("Mounting FS...");
+  if (!LittleFS.begin()) {
+    Serial.println("Failed to mount file system");
+    return;
+  }
+  // saveConfig();
+  listDir("/");
+  loadConfig();
 
-     if (ready) {
-        espNow.init(NOW_MODE_SLAVE);
-        espNow.enable_retries(true);
-        // static CMMC_LED *led;
-        // static ESPNowModule* module;
-        // led = ((CMMC_Legend*) os)->getBlinker();
-        // led->detach();
-        espNow.on_message_sent([](uint8_t *macaddr, u8 status) {
-          sent_count++;
-          led.toggle();
-          // Serial.println("on sent");
-          // led.toggle();
-        });
-        // module = this;
-        espNow.on_message_recv([](uint8_t * macaddr, uint8_t * data, uint8_t len) {
-          // Serial.println("on recv");
-          // user_espnow_sent_at = millis();
-          // led.toggle();
-          // Serial.printf("RECV: len = %u byte, sleepTime = %lu at(%lu ms)\r\n", len, data[0], millis());
-          // module->_go_sleep(data[0]);
-        });
-     }
-     else {
-       instance.debug([](const char* c) {
-         Serial.println(c);
-       });
+  if (ready) {
+    espNow.init(NOW_MODE_SLAVE);
+    espNow.enable_retries(true);
+    // static CMMC_LED *led;
+    // static ESPNowModule* module;
+    // led = ((CMMC_Legend*) os)->getBlinker();
+    // led->detach();
+    espNow.on_message_sent([](uint8_t *macaddr, u8 status) {
+      sent_count++;
+      led.toggle();
+      // Serial.println("on sent");
+      // led.toggle();
+    });
+    // module = this;
+    espNow.on_message_recv([](uint8_t * macaddr, uint8_t * data, uint8_t len) {
+      // Serial.println("on recv");
+      // user_espnow_sent_at = millis();
+      // led.toggle();
+      // Serial.printf("RECV: len = %u byte, sleepTime = %lu at(%lu ms)\r\n", len, data[0], millis());
+      // module->_go_sleep(data[0]);
+    });
+  }
+  else {
+    instance.debug([](const char* c) {
+      Serial.println(c);
+    });
 
-       instance.begin(SLAVE_MODE, evt_callback);
-       instance.start();
-     }
+    instance.begin(SLAVE_MODE, evt_callback);
+    instance.start();
+  }
 
 }
 
@@ -194,13 +194,13 @@ uint32_t prev = millis();
 void loop()
 {
   count++;
-//  Serial.println("XYA");
+  //  Serial.println("XYA");
 
   if (ready) {
     if (sent_count > 0 &&  sent_count % 100 == 0 ) {
       // Serial.print(sent_count);
       // Serial.println(" msg/s");
-      Serial.printf("diff = %lu, rate = %f\r\n", millis() - prev, (float)sent_count/( (millis() - prev)/1000.0));
+      Serial.printf("diff = %lu, rate = %f\r\n", millis() - prev, (float)sent_count / ( (millis() - prev) / 1000.0));
       sent_count = 0;
       count = 0;
       prev = millis();
