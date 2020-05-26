@@ -218,18 +218,11 @@ void loop()
 
   if (ready) {
     if (sent_count > 0 &&  sent_count % 100 == 0 ) {
-      // Serial.print(sent_count);
-      // Serial.println(" msg/s");
       Serial.printf("diff = %lu, rate = %f\r\n", millis() - prev, (float)sent_count / ( (millis() - prev) / 1000.0));
       sent_count = 0;
       count = 0;
       prev = millis();
     }
-    // espNow.send(master_mac, (u8*) &data, sizeof(data), [&]() {
-    //   Serial.println("Sent!");
-    //     // Serial.printf("espnow sending timeout. sleepTimeM = %lu\r\n", _defaultDeepSleep_m);
-    //     // _go_sleep(_defaultDeepSleep_m);
-    //   }, 0);
     dump(master_mac, 6);
     esp_now_send(master_mac, (u8*) &data, sizeof(data));
     delay(20);
