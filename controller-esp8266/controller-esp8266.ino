@@ -35,7 +35,6 @@ uint32_t recv_count = 0;
 
 #define LED_PIN                 (16)
 #define BUTTON_PIN              (0)
-
 Button2 button = Button2(BUTTON_PIN);
 
 char* espnowMsg[300];

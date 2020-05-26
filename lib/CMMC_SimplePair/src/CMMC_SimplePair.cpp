@@ -285,6 +285,9 @@ void CMMC_SimplePair::_simple_pair_init() {
               bss_link = STAILQ_NEXT(bss_link, next);
           }
           Serial.println("DONE!");
+          // ESP.deepSleep(0);
+          // deini
+          // esp_deep_sleep_start();
         } else {
           sprintf(_this->_debug_buffer, "err, scan status %d", status);
           _this->debug_cb(_this->_debug_buffer);

@@ -9,11 +9,24 @@
 #include <ArduinoJSON.h>
 #include <CMMC_LED.h>
 #include <CMMC_Utils.h>
+#include <Ticker.h>
+#include <Button2.h>
 
 #define LED_PIN (2)
 CMMC_ESPNow espNow;
 CMMC_LED led(LED_PIN, LOW);
 CMMC_SimplePair instance;
+Ticker blinker;
+
+#define BUTTON_PIN              (0)
+Button2 button = Button2(BUTTON_PIN);
+
+
+void flip() {
+  led.toggle();
+}
+
+
 
 void dump(const u8* data, size_t size) {
   for (size_t i = 0; i < size - 1; i++) {
@@ -117,6 +130,8 @@ void evt_callback(u8 status, u8* sa, const u8* data) {
     Serial.printf("FROM MAC: "); dump(sa, 6);
     memcpy(master_mac, sa, 6);
     saveConfig();
+    delay(100);
+    ESP.restart();
   }
   else {
     Serial.printf("[CSP_EVENT_ERROR] %d: %s\r\n", status, (const char*)data);
@@ -130,18 +145,37 @@ typedef struct __attribute((__packed__)) {
   uint8_t type2 = 0;
 } CMMC_SENSOR_DATA_T;
 
-
 CMMC_SENSOR_DATA_T data;
+
+void start_config_mode() {
+  instance.debug([](const char* c) {
+    Serial.println(c);
+  });
+
+  instance.begin(SLAVE_MODE, evt_callback);
+  instance.start();
+}
+
+void tripleClick(Button2& btn) {
+    ready = false;
+    Serial.println("triple click\n");
+    blinker.attach_ms(100, flip);
+    esp_now_deinit();
+    start_config_mode();
+}
+
+
+
 
 void setup()
 {
-
-
   wifi_station_set_auto_connect(0);
   led.init();
   Serial.begin(115200);
-
   LittleFS.begin();
+
+  button.setDoubleClickHandler(tripleClick);
+
   // delay(2000);
   // delay(5000);
   // 60 01 94 3f f7 aa
@@ -165,27 +199,13 @@ void setup()
     espNow.on_message_sent([](uint8_t *macaddr, u8 status) {
       sent_count++;
       led.toggle();
-      // Serial.println("on sent");
-      // led.toggle();
     });
     // module = this;
-    espNow.on_message_recv([](uint8_t * macaddr, uint8_t * data, uint8_t len) {
-      // Serial.println("on recv");
-      // user_espnow_sent_at = millis();
-      // led.toggle();
-      // Serial.printf("RECV: len = %u byte, sleepTime = %lu at(%lu ms)\r\n", len, data[0], millis());
-      // module->_go_sleep(data[0]);
-    });
+    espNow.on_message_recv([](uint8_t * macaddr, uint8_t * data, uint8_t len) { });
   }
   else {
-    instance.debug([](const char* c) {
-      Serial.println(c);
-    });
 
-    instance.begin(SLAVE_MODE, evt_callback);
-    instance.start();
   }
-
 }
 
 
@@ -194,7 +214,7 @@ uint32_t prev = millis();
 void loop()
 {
   count++;
-  //  Serial.println("XYA");
+  button.loop();
 
   if (ready) {
     if (sent_count > 0 &&  sent_count % 100 == 0 ) {
