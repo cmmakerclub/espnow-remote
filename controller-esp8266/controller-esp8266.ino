@@ -23,8 +23,6 @@ extern "C" {
 // #include <SoftwareSerial.h>
 #include <Button2.h>
 
-#include "data_type.h"
-
 uint8_t self_mac[6];
 uint8_t master_mac[6];
 uint8_t slave_mac[6];
@@ -217,10 +215,11 @@ uint32_t prev = millis();
 void loop()
 {
   button.loop();
-  if (millis() % 2000 == 0) {
-    Serial.println(recv_count/2);
+  if (recv_count > 0 && (recv_count % 1000) == 0) {
+    // Serial.printf("%f count=%lu, diff=%dms \r\n", 0.0, recv_count, (millis() - prev));
+    Serial.printf("%f Hz\r\n", (float)recv_count/(millis() - prev)*1000);
+    prev = millis();
     recv_count = 0;
-    delay(10);
   }
 }
 
